@@ -10,6 +10,12 @@ from micropython import const
 import bluetooth
 import time
 
+try:
+    from tft_display import ST7796S
+except Exception as exc:
+    ST7796S = None
+    print("S3_TFT=unavailable error=" + str(exc))
+
 
 UART_ID = 1
 UART_BAUD = 115200
@@ -18,6 +24,7 @@ UART_TX_PIN = 17
 LINE_BUFFER_SIZE = 96
 HEARTBEAT_INTERVAL_MS = 1000
 REPORT_INTERVAL_MS = 5000
+TFT_UPDATE_INTERVAL_MS = 100
 RADAR_TARGET_COUNT = 3
 
 BLE_NAME = "PFT-SuriOS S3"
@@ -59,6 +66,7 @@ last_radar_sequence = None
 radar_targets = [(0, 0, 0)] * RADAR_TARGET_COUNT
 last_tx_at = time.ticks_ms()
 last_report_at = last_tx_at
+last_tft_update_at = last_tx_at
 
 ble = bluetooth.BLE()
 ble_connections = []
@@ -66,6 +74,37 @@ ble_commands = []
 ble_event_handle = None
 ble_command_handle = None
 active_tool = "DETECTOR"
+
+
+def start_tft():
+    if ST7796S is None:
+        return None
+    try:
+        display = ST7796S()
+        display.init()
+        display.show_boot_screen()
+        print("S3_TFT=ready bus={} size={}x{}".format(
+            display.spi_bus, 480, 320
+        ))
+        return display
+    except Exception as exc:
+        print("S3_TFT=error " + str(exc))
+        return None
+
+
+def update_tft():
+    if display is None:
+        return
+    try:
+        display.show_radar_frame(
+            radar_targets,
+            last_radar_sequence,
+            radar_missing_packets,
+            0.0,
+            "RECIBIENDO" if radar_packet_count else "CONECTANDO",
+        )
+    except Exception as exc:
+        print("S3_TFT_UPDATE_ERROR=" + str(exc))
 
 
 def advertising_payload(name):
@@ -285,6 +324,7 @@ print("PFT SPRINT 3 BLE TOOL LINK TEST")
 print("S3 UART{} RX={} TX={} baud={}".format(
     UART_ID, UART_RX_PIN, UART_TX_PIN, UART_BAUD
 ))
+display = start_tft()
 start_ble()
 print("S3 BLE name={} service={}".format(BLE_NAME, BLE_SERVICE_UUID))
 
@@ -310,5 +350,9 @@ while True:
             active_tool
         ))
         last_report_at = now
+
+    if time.ticks_diff(now, last_tft_update_at) >= TFT_UPDATE_INTERVAL_MS:
+        update_tft()
+        last_tft_update_at = now
 
     time.sleep_ms(10)

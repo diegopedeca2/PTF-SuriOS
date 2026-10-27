@@ -11,5 +11,6 @@ definir en su sprint correspondiente.
 
 ## Estructura
 
+- `docs/`: sprints, decisiones y documentación técnica.
 - `work/`: código y pruebas de desarrollo.
 - `outputs/`: salidas generadas y artefactos de prueba.
